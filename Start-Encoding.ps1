@@ -9,21 +9,23 @@
 param (
     [Parameter(Position = 0, Mandatory = $true)]
     [string]
-    $SourceFile="",
+    $SourceFile = "",
 
     [Parameter(Position = 1, Mandatory = $true)]
     [string]
-    $OutputFile="",
+    $OutputFile = "",
 
     [Parameter(Position = 2, Mandatory = $false)]
     [string]
-    $BitRate="10091k"
+    $BitRate = "10091k"
 )
 
 # kBit/s
 # $BitRate = "10091k"
 
-Set-Location F:\DroneVideosToProcess
+# Set-Location F:\DroneVideosToProcess
+# $currentDir = ($PWD).Path
+$currentDir = Get-Location
 
 if ([string]::IsNullOrEmpty($SourceFile))
 {
@@ -79,7 +81,7 @@ function EncodeVideo
    
         Write-Host "Starting encoding job on the file '$inFile'"  -ForegroundColor Gray
         Write-Host "Running Pass-1" 
-        $outFile =$OutFile      
+        $outFile = $OutFile      
 
         if ($outFile -eq "")
         {
@@ -87,31 +89,31 @@ function EncodeVideo
             exit
         }
 
-        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight 2022-06-28" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=1 -an -f mp4 NUL
-        
+        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=1 -an -f mp4 NUL        
 
         Write-Host "Running Pass-2"        
-        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight 2022-06-28" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=2 -f mp4 -y $OutFile        
+        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=2 -f mp4 -y $OutFile
     }
     catch
     {
         Write-Host "Unexpected error while running ffmpeg" -ForegroundColor Red
     }
 
-    Write-Host "Encoding complete" -ForegroundColor Green
-
-}
+    Write-Host "Encoding complete" -ForegroundColor Green}
 
 Write-Host "InputFile: $SourceFile"
 Write-Host "OutputFile: $OutputFile"
-Write-Host "Full Path: " -ForegroundColor White
-Write-Host  (Get-ChildItem -Path "$PWD\$SourceFile" | Select-Object -Property FullName -ExpandProperty FullName) -ForegroundColor Green
-Write-host "Bitrate is set to $BitRate"
+Write-Host "Bitrate is set to $BitRate"
 
 $prompt = Read-Host "Continue with encoding? (Y/n)"
 if (($prompt -eq "y") -or ($prompt -eq "") )
 {
-    EncodeVideo -InFile $SourceFile -OutFile $OutputFile    
+    $inPath = Join-Path -Path $currentDir -ChildPath $SourceFile
+    $outPath = Join-Path -Path $currentDir -ChildPath $OutputFile
+
+    Write-Host "Full Path: " -ForegroundColor White
+
+    EncodeVideo -InFile $inPath -OutFile $outPath    
 }
 else 
 {

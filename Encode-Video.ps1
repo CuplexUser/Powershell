@@ -46,7 +46,6 @@ if ([string]::IsNullOrEmpty($OutputFile))
     exit 
 }
 
-
 function EncodeVideo
 {
     param(
@@ -63,7 +62,7 @@ function EncodeVideo
     )
 
     try
-    {       
+    {          
         if (Test-Path -Path $InFile)
         {
             $inFile = $InFile
@@ -80,7 +79,7 @@ function EncodeVideo
         } 
    
         Write-Host "Starting encoding job on the file '$inFile'"  -ForegroundColor Gray
-        Write-Host "Running Pass-1" 
+        Write-Host "Running First Encoder pass" -ForegroundColor Green
         $outFile = $OutFile      
 
         if ($outFile -eq "")
@@ -88,18 +87,19 @@ function EncodeVideo
             Write-Host "Output File path must be defined" -ForegroundColor Yellow
             exit
         }
+        
+        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=1 -an -f mp4 NUL
 
-        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=1 -an -f mp4 NUL        
-
-        Write-Host "Running Pass-2"        
-        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=2 -f mp4 -y $OutFile
+        Write-Host "Running Second Encoder Pass" -ForegroundColor Green       
+        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=2 -f mp4 -y $OutFile 
     }
     catch
     {
         Write-Host "Unexpected error while running ffmpeg" -ForegroundColor Red
     }
 
-    Write-Host "Encoding complete" -ForegroundColor Green}
+    Write-Host "Encoding complete" -ForegroundColor Green
+}
 
 Write-Host "InputFile: $SourceFile"
 Write-Host "OutputFile: $OutputFile"

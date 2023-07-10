@@ -17,7 +17,19 @@ param (
 
     [Parameter(Position = 2, Mandatory = $false)]
     [string]
-    $BitRate = "10091k"
+    $BitRate = "10091k",
+
+    [Parameter(Position = 3, Mandatory = $false)]
+    [double]
+    $FrameRate = 29.97,
+
+    [Parameter(Position = 4, Mandatory = $false)]
+    [switch]
+    $EncodeWithAudio = $false,
+
+    [Parameter(Position = 5, Mandatory = $false)]
+    [switch]
+    $ShowEncoderCommands = $false
 )
 
 # kBit/s
@@ -26,6 +38,7 @@ param (
 # Set-Location F:\DroneVideosToProcess
 # $currentDir = ($PWD).Path
 $currentDir = Get-Location
+
 
 if ([string]::IsNullOrEmpty($SourceFile))
 {
@@ -44,6 +57,36 @@ if ([string]::IsNullOrEmpty($OutputFile))
 {
     Write-Host "The OutFile param can not be empty" -ForegroundColor Yellow
     exit 
+}
+
+function Get-CustomErrorMessage($ErrorMessage)
+{ 
+    $FinalErrorMessage = "Error occurred: $ErrorMessage" 
+    return $FinalErrorMessage
+}
+
+# Extract the filename from a full path of a file that does not exist yet
+function Get-MetadataTitle
+{
+    param(
+        [Parameter(Mandatory = $true,
+            Position = 0,
+            ValueFromPipeline = $true,
+            ValueFromPipelineByPropertyName = $true)]
+        [String]$FullPath
+    )
+    $title = $FullPath.Split("\");
+    $title = $title[$title.Length - 1]
+
+
+    $ext = $title.LastIndexOf(".")
+    $extLength = $title.Length - $ext
+    if ($ext -gt 1)
+    {
+        $title = $title.Substring(0, $title.Length - $extLength)
+    }
+
+    return $title
 }
 
 function EncodeVideo
@@ -88,14 +131,48 @@ function EncodeVideo
             exit
         }
         
-        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=1 -an -f mp4 NUL
+        $title = Get-MetadataTitle -FullPath $OutFile
+        Write-Host "Setting metadata Title to: $title" -ForegroundColor DarkYellow
 
-        Write-Host "Running Second Encoder Pass" -ForegroundColor Green       
-        ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -me_method star -bf -1 -refs 3 -r 29.97 -pix_fmt yuv420p -metadata title="Drone flight" -metadata album_artist="Martin Dahl" -aspect 16:9 -b:v $BitRate -x265-params pass=2 -f mp4 -y $OutFile 
+        if ($EncodeWithAudio)
+        {
+            $command = "ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:v -map 0:a -c:v hevc_nvenc -trellis 2 -threads auto -preset:v slow -tune hq -keyint_min 300 -g 600 -bf 3 -refs -1 -r $FrameRate -b:v $BitRate -pix_fmt yuv420p -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -x265-params pass=1 -an -f null NUL"
+            if ($ShowEncoderCommands) 
+            {
+                Write-Host $command -ForegroundColor DarkGray
+            }
+            Invoke-Expression $command
+            Write-Host "Running Second Encoder Pass" -ForegroundColor Green       
+            
+            $command = "ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:v -map 0:a -c:v hevc_nvenc -trellis 2 -threads auto -preset:v slow -tune hq -keyint_min 300 -g 600 -bf 3 -refs -1 -r $FrameRate -pix_fmt yuv420p -b:v $BitRate -c:a aac -profile:a aac_he_v2 -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -x265-params pass=2  -f mp4 -y $OutFile"
+            if ($ShowEncoderCommands) 
+            {
+                Write-Host $command -ForegroundColor DarkGray
+            }
+            Invoke-Expression $command
+        }
+        else
+        {
+            $command = "ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow - -keyint_min 300 -g 600 -bf -1 -refs 3 -r $FrameRate -pix_fmt yuv420p -b:v $BitRate -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -b:v $BitRate -x265-params 'pass=1' -an -f mp4 NUL"
+            if ($ShowEncoderCommands) 
+            {
+                Write-Host $command -ForegroundColor DarkGray
+            }
+            Invoke-Expression $command
+
+            Write-Host "Running Second Encoder Pass" -ForegroundColor Green       
+            $command = "ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -bf -1 -refs 3 -r $FrameRate -pix_fmt yuv420p -b:v $BitRate -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -b:v $BitRate -x265-params 'pass=2' -f mp4 -y $OutFile"
+            if ($ShowEncoderCommands) 
+            {
+                Write-Host $command -ForegroundColor DarkGray
+            }
+            Invoke-Expression $command
+        }
     }
     catch
     {
         Write-Host "Unexpected error while running ffmpeg" -ForegroundColor Red
+        Write-Host Get-CustomErrorMessage($ErrorMessage) -ForegroundColor Yellow
     }
 
     Write-Host "Encoding complete" -ForegroundColor Green
@@ -111,7 +188,7 @@ if (($prompt -eq "y") -or ($prompt -eq "") )
     $inPath = Join-Path -Path $currentDir -ChildPath $SourceFile
     $outPath = Join-Path -Path $currentDir -ChildPath $OutputFile
 
-    Write-Host "Full Path: " -ForegroundColor White
+    Write-Host "Full Path: " -ForegroundColor White    
 
     EncodeVideo -InFile $inPath -OutFile $outPath    
 }

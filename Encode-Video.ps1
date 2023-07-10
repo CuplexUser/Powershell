@@ -120,10 +120,10 @@ function EncodeVideo
                 exit
             }
         } 
-   
+
+        $TempDir = $ENV:TEMP
+        $outFile = $OutFile 
         Write-Host "Starting encoding job on the file '$inFile'"  -ForegroundColor Gray
-        Write-Host "Running First Encoder pass" -ForegroundColor Green
-        $outFile = $OutFile      
 
         if ($outFile -eq "")
         {
@@ -133,41 +133,34 @@ function EncodeVideo
         
         $title = Get-MetadataTitle -FullPath $OutFile
         Write-Host "Setting metadata Title to: $title" -ForegroundColor DarkYellow
-
+        $AudioParams = ""
+        $Mapping = "-map 0:0"
+        
         if ($EncodeWithAudio)
         {
-            $command = "ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:v -map 0:a -c:v hevc_nvenc -trellis 2 -threads auto -preset:v slow -tune hq -keyint_min 300 -g 600 -bf 3 -refs -1 -r $FrameRate -b:v $BitRate -pix_fmt yuv420p -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -x265-params pass=1 -an -f null NUL"
-            if ($ShowEncoderCommands) 
-            {
-                Write-Host $command -ForegroundColor DarkGray
-            }
-            Invoke-Expression $command
-            Write-Host "Running Second Encoder Pass" -ForegroundColor Green       
-            
-            $command = "ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:v -map 0:a -c:v hevc_nvenc -trellis 2 -threads auto -preset:v slow -tune hq -keyint_min 300 -g 600 -bf 3 -refs -1 -r $FrameRate -pix_fmt yuv420p -b:v $BitRate -c:a aac -profile:a aac_he_v2 -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -x265-params pass=2  -f mp4 -y $OutFile"
-            if ($ShowEncoderCommands) 
-            {
-                Write-Host $command -ForegroundColor DarkGray
-            }
-            Invoke-Expression $command
+            $AudioParams = "-c:a aac -b:a 128k -ac 2 -profile:a aac_he_v2"
+            $Mapping = "-map 0:0 -map 0:1"
         }
-        else
-        {
-            $command = "ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow - -keyint_min 300 -g 600 -bf -1 -refs 3 -r $FrameRate -pix_fmt yuv420p -b:v $BitRate -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -b:v $BitRate -x265-params 'pass=1' -an -f mp4 NUL"
-            if ($ShowEncoderCommands) 
-            {
-                Write-Host $command -ForegroundColor DarkGray
-            }
-            Invoke-Expression $command
 
-            Write-Host "Running Second Encoder Pass" -ForegroundColor Green       
-            $command = "ffmpeg -hide_banner -hwaccel cuda -i $inFile -map 0:0 -c:v hevc_nvenc -trellis 0 -preset:v slow -keyint_min 300 -g 600 -bf -1 -refs 3 -r $FrameRate -pix_fmt yuv420p -b:v $BitRate -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -b:v $BitRate -x265-params 'pass=2' -f mp4 -y $OutFile"
-            if ($ShowEncoderCommands) 
-            {
-                Write-Host $command -ForegroundColor DarkGray
-            }
-            Invoke-Expression $command
+        Write-Host "Running First Encoder pass" -ForegroundColor Green
+        $command = "ffmpeg -hide_banner -hwaccel cuda -i '$inFile' -map 0:0 -c:v hevc_nvenc -trellis 2 -threads auto -preset:v slow -tune hq -keyint_min 300 -g 1000 -me_method umh -bf 3 -refs 0 -r $FrameRate -pix_fmt yuv420p -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -b:v $BitRate -pass 1 -passlogfile '$TempDir\encodeScript_ffmpeg_multipass' -an -f mp4 NUL"
+        
+        if ($ShowEncoderCommands) 
+        {
+            Write-Host $command -ForegroundColor DarkGray
         }
+        Invoke-Expression -Command $command
+
+        Write-Host "Running Second Encoder Pass" -ForegroundColor Green   
+        $command = "ffmpeg -hide_banner -hwaccel cuda -i '$inFile' $Mapping -c:v hevc_nvenc -trellis 2 -threads auto -preset:v slow -tune hq -keyint_min 300 -g 1000 -me_method umh -bf 3 -refs 0 -r $FrameRate -pix_fmt yuv420p $AudioParams -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -b:v $BitRate -pass 2 -passlogfile '$TempDir\encodeScript_ffmpeg_multipass' -f mp4 -y '$OutFile'"
+
+        if ($ShowEncoderCommands) 
+        {
+            Write-Host $command -ForegroundColor DarkGray
+        }
+        Invoke-Expression -Command $command
+        Write-Host "Encoding Completed" -ForegroundColor Green
+
     }
     catch
     {

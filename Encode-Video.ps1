@@ -160,11 +160,11 @@ function EncodeVideo
         if ($UseHqdn3dFilter)
         {
             # Only Setting luma spartial Strength while will make the other 3 default and recalculate ther values based on only luma spartial value set. 
-            $FilterParams = "-filter_complex '[0:0]hqdn3d=luma_spatial=4:chroma_spatial=3:luma_tmp=4:chroma_tmp=3'"
+            $FilterParams = "-filter_complex '[0:v]hqdn3d=luma_spatial=4:chroma_spatial=3:luma_tmp=4:chroma_tmp=3'"
         }
 
         Write-Host "Running First Encoder pass" -ForegroundColor Green
-        $command = "ffmpeg -hide_banner -hwaccel cuda -i `"$inFile`" -map 0 $FilterParams -c:v hevc_nvenc -trellis 2 -threads auto -preset:v slow -tune hq -r $FrameRate -keyint_min 300 -g 1000 -me_method umh -bf 3 -refs 0  -pix_fmt yuv420p -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -b:v $BitRate -pass 1 -an -f mp4 NUL"
+        $command = "ffmpeg -hide_banner -hwaccel cuda -i `"$inFile`" $FilterParams -c:v hevc_nvenc -b:v $BitRate -trellis 2 -threads auto -preset:v slow -tune hq -r $FrameRate -keyint_min 300 -g 1000 -me_method umh -bf 3 -refs 0  -pix_fmt yuv420p -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -pass 1 -an -f mp4 NUL"
         
         if ($ShowEncoderCommands) 
         {
@@ -173,7 +173,7 @@ function EncodeVideo
         Invoke-Expression -Command $command
 
         Write-Host "Running Second Encoder Pass" -ForegroundColor Green   
-        $command = "ffmpeg -hide_banner -hwaccel cuda -i `"$inFile`" -map 0 $FilterParams -c:v hevc_nvenc -trellis 2 -threads auto -preset:v slow -tune hq -r $FrameRate -keyint_min 300 -g 1000 -me_method umh -bf 3 -refs 0 -pix_fmt yuv420p $AudioParams -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -b:v $BitRate -pass 2 -f mp4 -y '$OutFile'"
+        $command = "ffmpeg -hide_banner -hwaccel cuda -i `"$inFile`" $FilterParams -c:v hevc_nvenc -b:v $BitRate -trellis 2 -threads auto -preset:v slow -tune hq -r $FrameRate -keyint_min 300 -g 1000 -me_method umh -bf 3 -refs 0 -pix_fmt yuv420p $AudioParams -metadata title='$title' -metadata year='$([System.DateTime]::Today.Year)' -aspect 16:9 -pass 2 -f mp4 -y '$OutFile'"
 
         if ($ShowEncoderCommands) 
         {
